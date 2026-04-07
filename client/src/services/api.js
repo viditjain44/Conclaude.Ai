@@ -4,6 +4,10 @@ const API = axios.create({
   baseURL: "http://localhost:5000/api",
 });
 
+// ─────────────────────────────────────────
+// BRAND & STATS
+// ─────────────────────────────────────────
+
 // Saare brands fetch karo
 export const fetchBrands = () => API.get("/brands");
 
@@ -11,9 +15,9 @@ export const fetchBrands = () => API.get("/brands");
 export const fetchBrandStats = (widgetId) =>
   API.get(`/brands/${widgetId}/stats`);
 
-// Brand ke AI insights fetch karo
-export const fetchBrandInsights = (widgetId) =>
-  API.get(`/brands/${widgetId}/insights`);
+// ─────────────────────────────────────────
+// CONVERSATIONS
+// ─────────────────────────────────────────
 
 // Brand ki saari conversations fetch karo
 export const fetchConversations = (widgetId) =>
@@ -23,6 +27,26 @@ export const fetchConversations = (widgetId) =>
 export const fetchConversationDetail = (conversationId) =>
   API.get(`/conversations/detail/${conversationId}`);
 
-// Single conversation ka AI analysis fetch karo
+// ─────────────────────────────────────────
+// AI INSIGHTS & OPTIMIZATION (NEW FEATURES)
+// ─────────────────────────────────────────
+
+// Brand ke high-level AI insights (Health, Issues, Strengths)
+export const fetchBrandInsights = (widgetId) =>
+  API.get(`/brands/${widgetId}/insights`);
+
+// Single conversation ka detailed AI analysis
 export const fetchConversationInsights = (conversationId) =>
   API.get(`/insights/${conversationId}`);
+
+// NEW: Failed conversations analyze karke naya system prompt generate karo
+export const fetchSystemPromptGenerator = (widgetId) =>
+  API.get(`/brands/${widgetId}/system-prompt`);
+
+// NEW: Real user questions se automatic FAQs generate karo
+export const fetchFAQGenerator = (widgetId) =>
+  API.get(`/brands/${widgetId}/faqs`);
+
+// NEW: Successful conversation pairs export karo (Training/Fine-tuning ke liye)
+export const fetchTrainingDataExporter = (widgetId) =>
+  API.get(`/brands/${widgetId}/training-data`);

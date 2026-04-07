@@ -4,93 +4,95 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Brand ke liye AI insights generate karo
+
+// Helper to extract JSON safely from LLM responses
+const extractJSON = (text) => {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return null;
+  } catch (e) {
+    console.error("JSON Parse Error:", e);
+    return null;
+  }
+};
+
+// ─────────────────────────────────────────
+// BRAND INSIGHTS
+// ─────────────────────────────────────────
 const generateBrandInsights = async (brandData) => {
   const { stats, conversations, patterns } = brandData;
 
-  const sampleConvos = conversations.slice(0, 10).map((conv) => ({
+  const sampleConvos = conversations.slice(0, 8).map((conv) => ({
     messages: conv.messages
       .filter((m) => m.messageType === "text")
+      .slice(-4)
       .map((m) => `${m.sender}: ${m.text}`)
       .join("\n"),
     status: patterns.conversationStatuses[conv._id],
   }));
 
-  const prompt = `You are analyzing an AI shopping assistant's conversation data for a brand.
+  const prompt = `Analyze chatbot performance.
 
 STATS:
-- Total Conversations: ${stats.totalConversations}
-- Avg Messages per Conversation: ${stats.avgMessagesPerConversation}
-- Product Views: ${stats.productViews}
-- Frustrated Conversations: ${patterns.frustratedCount}
-- Dropped Off Conversations: ${patterns.droppedOffCount}
-- Poor Response Rate: ${patterns.avgPoorResponseRate}%
+- Total: ${stats.totalConversations}
+- Frustrated: ${patterns.frustratedCount}
+- Dropped: ${patterns.droppedOffCount}
 
-SAMPLE CONVERSATIONS:
-${sampleConvos
-  .map(
-    (c, i) => `
-Conversation ${i + 1} (${c.status}):
-${c.messages}
----`
-  )
-  .join("\n")}
+SAMPLES:
+${sampleConvos.map((c, i) => `Conv ${i + 1} (${c.status}):\n${c.messages}`).join("\n---")}
 
-Based on this data, provide actionable insights in this exact JSON format:
+Return JSON:
 {
   "brandHealth": "good/average/poor",
-  "healthScore": <number 0-100>,
-  "topIssues": [
-    {"issue": "...", "impact": "high/medium/low", "recommendation": "..."}
-  ],
-  "strengths": ["...", "..."],
-  "summary": "2-3 sentence executive summary of brand performance"
-}
-
-Return ONLY the JSON, no extra text, no markdown backticks.`;
+  "healthScore": 0-100,
+  "topIssues": [],
+  "strengths": [],
+  "summary": "..."
+}`;
 
   const response = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages: [{ role: "user", content: prompt }],
     temperature: 0.3,
-    max_tokens: 1000,
+    max_tokens: 800,
   });
 
   const text = response.choices[0].message.content;
-
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
-  }
-
-  return { summary: text };
+  return extractJSON(text) || {
+    summary: text,
+    brandHealth: "average",
+    healthScore: 50,
+    topIssues: [],
+    strengths: [],
+  };
 };
 
-// Single conversation ka AI analysis
+// ─────────────────────────────────────────
+// SINGLE CONVERSATION ANALYSIS
+// ─────────────────────────────────────────
 const analyzeConversation = async (conversation) => {
   const textMessages = conversation.messages
     .filter((m) => m.messageType === "text")
+    .slice(-8)
     .map((m) => `${m.sender.toUpperCase()}: ${m.text}`)
     .join("\n");
 
-  const prompt = `Analyze this AI shopping assistant conversation and provide insights:
+  const prompt = `Analyze conversation:
 
-CONVERSATION:
 ${textMessages}
 
-Provide analysis in this exact JSON format:
+Return JSON:
 {
-  "overallSentiment": "positive/neutral/negative",
+  "overallSentiment": "",
   "wasResolved": true/false,
-  "issues": [
-    {"type": "hallucination/poor_response/irrelevant_product/unanswered", "description": "..."}
-  ],
-  "assistantPerformance": "good/average/poor",
-  "keyMoment": "The most critical moment in this conversation",
-  "recommendation": "One specific thing the assistant should have done differently"
-}
-
-Return ONLY the JSON, no extra text, no markdown backticks.`;
+  "issues": [],
+  "assistantPerformance": "",
+  "keyMoment": "",
+  "recommendation": ""
+}`;
 
   const response = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
@@ -100,13 +102,142 @@ Return ONLY the JSON, no extra text, no markdown backticks.`;
   });
 
   const text = response.choices[0].message.content;
-
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
-  }
-
-  return { summary: text };
+  return extractJSON(text) || {
+    assistantPerformance: "poor",
+    recommendation: "Check logs.",
+  };
 };
 
-module.exports = { generateBrandInsights, analyzeConversation };
+// ─────────────────────────────────────────
+// SYSTEM PROMPT GENERATOR (FIXED)
+// ─────────────────────────────────────────
+const generateSystemPrompt = async (conversations) => {
+  const shuffled = [...conversations].sort(() => 0.5 - Math.random());
+  const selectedConvs = shuffled.slice(0, 5);
+
+  let badConvos = selectedConvs
+    .map((conv) =>
+      conv.messages
+        .filter((m) => m.messageType === "text")
+        .slice(-3)
+        .map((m) => `${m.sender}: ${m.text}`)
+        .join("\n")
+    )
+    .join("\n---\n");
+
+  // HARD LIMIT
+  if (badConvos.length > 8000) {
+    badConvos = badConvos.slice(0, 8000);
+  }
+
+  const prompt = `Improve chatbot system prompt.
+
+Conversations:
+${badConvos}
+
+Return JSON:
+{
+  "systemPrompt": "short and effective prompt",
+  "keyImprovements": []
+}`;
+
+  const response = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.4,
+    max_tokens: 800,
+  });
+
+  const text = response.choices[0].message.content;
+  return extractJSON(text) || {
+    systemPrompt: text,
+    keyImprovements: ["Improved clarity", "Reduced verbosity"],
+  };
+};
+
+// ─────────────────────────────────────────
+// FAQ GENERATOR (FIXED)
+// ─────────────────────────────────────────
+const generateFAQs = async (conversations) => {
+  const shuffled = [...conversations].sort(() => 0.5 - Math.random());
+  const randomConvs = shuffled.slice(0, 5);
+
+  let allUserMessages = randomConvs
+    .flatMap((conv) =>
+      conv.messages
+        .filter((m) => m.messageType === "text" && m.sender === "user")
+        .slice(-3)
+    )
+    .map((m) => m.text)
+    .filter(Boolean)
+    .join("\n");
+
+  if (allUserMessages.length > 12000) {
+    allUserMessages = allUserMessages.slice(0, 12000);
+  }
+
+  const prompt = `Generate FAQs:
+
+${allUserMessages}
+
+Return JSON:
+{
+  "faqs": [
+    {"question": "...", "answer": "...", "category": ""}
+  ]
+}`;
+
+  const response = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.3,
+    max_tokens: 800,
+  });
+
+  const text = response.choices[0].message.content;
+  return extractJSON(text) || { faqs: [] };
+};
+
+// ─────────────────────────────────────────
+// TRAINING DATA
+// ─────────────────────────────────────────
+const generateTrainingData = async (conversations) => {
+  const goodConvos = conversations
+    .filter((conv) => {
+      const msgs = conv.messages.filter((m) => m.messageType === "text");
+      return msgs.length && msgs[msgs.length - 1].sender === "agent";
+    })
+    .slice(0, 15);
+
+  const trainingPairs = [];
+
+  goodConvos.forEach((conv) => {
+    const msgs = conv.messages.filter((m) => m.messageType === "text");
+
+    for (let i = 0; i < msgs.length - 1; i++) {
+      if (msgs[i].sender === "user" && msgs[i + 1].sender === "agent") {
+        const clean = msgs[i + 1].text.replace(/End of stream.*/gi, "").trim();
+
+        if (msgs[i].text.length > 5 && clean.length > 20) {
+          trainingPairs.push({
+            input: msgs[i].text,
+            output: clean,
+          });
+        }
+      }
+    }
+  });
+
+  return {
+    totalPairs: trainingPairs.length,
+    trainingData: trainingPairs,
+  };
+};
+
+module.exports = {
+  generateBrandInsights,
+  analyzeConversation,
+  generateSystemPrompt,
+  generateFAQs,
+  generateTrainingData,
+};

@@ -1,10 +1,20 @@
 const express = require("express");
 const router = express.Router();
 const { getAllBrands, getBrandStats, getConversationsByBrand } = require("../services/analytics");
-const { detectFrustration, detectDropOff, checkResponseQuality, getConversationStatus } = require("../services/patternDetector");
-const { generateBrandInsights } = require("../services/aiService");
+const { 
+  detectFrustration, 
+  detectDropOff, 
+  checkResponseQuality, 
+  getConversationStatus 
+} = require("../services/patternDetector");
+const { 
+  generateBrandInsights, 
+  generateSystemPrompt, 
+  generateFAQs, 
+  generateTrainingData 
+} = require("../services/aiService");
 
-// GET /api/brands — saare brands
+// GET /api/brands — Get all brands
 router.get("/", async (req, res) => {
   try {
     const brands = await getAllBrands();
@@ -14,7 +24,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET /api/brands/:widgetId/stats — brand stats
+// GET /api/brands/:widgetId/stats — Get brand stats
 router.get("/:widgetId/stats", async (req, res) => {
   try {
     const { widgetId } = req.params;
@@ -25,7 +35,7 @@ router.get("/:widgetId/stats", async (req, res) => {
   }
 });
 
-// GET /api/brands/:widgetId/insights — AI insights
+// GET /api/brands/:widgetId/insights — AI Insights & Patterns
 router.get("/:widgetId/insights", async (req, res) => {
   try {
     const { widgetId } = req.params;
@@ -35,7 +45,6 @@ router.get("/:widgetId/insights", async (req, res) => {
       getConversationsByBrand(widgetId),
     ]);
 
-    // Patterns detect karo
     let frustratedCount = 0;
     let droppedOffCount = 0;
     let totalPoorResponseRate = 0;
@@ -58,7 +67,6 @@ router.get("/:widgetId/insights", async (req, res) => {
       conversationStatuses,
     };
 
-    // Claude se insights
     const aiInsights = await generateBrandInsights({ stats, conversations, patterns });
 
     res.json({
@@ -66,6 +74,60 @@ router.get("/:widgetId/insights", async (req, res) => {
       data: { stats, patterns, aiInsights },
     });
   } catch (error) {
+    console.error("INSIGHTS ERROR:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────
+// AI FEATURE ROUTES
+// ──────────────────────────────────────────────────────────────────
+
+// GET /api/brands/:widgetId/system-prompt — Generate improved prompt
+router.get("/:widgetId/system-prompt", async (req, res) => {
+  try {
+    const { widgetId } = req.params;
+    const conversations = await getConversationsByBrand(widgetId);
+
+    console.log("✅ Conversations count:", conversations.length);
+    console.log("✅ Sample conv:", JSON.stringify(conversations[0], null, 2));
+
+    const result = await generateSystemPrompt(conversations);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("❌ SYSTEM PROMPT ERROR:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/brands/:widgetId/faqs — Generate FAQs
+router.get("/:widgetId/faqs", async (req, res) => {
+  try {
+    const { widgetId } = req.params;
+    const conversations = await getConversationsByBrand(widgetId);
+
+    console.log("✅ FAQs - Conversations count:", conversations.length);
+
+    const result = await generateFAQs(conversations);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("❌ FAQ ERROR:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/brands/:widgetId/training-data — Export training pairs
+router.get("/:widgetId/training-data", async (req, res) => {
+  try {
+    const { widgetId } = req.params;
+    const conversations = await getConversationsByBrand(widgetId);
+
+    console.log("✅ Training - Conversations count:", conversations.length);
+
+    const result = await generateTrainingData(conversations);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error("❌ TRAINING DATA ERROR:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

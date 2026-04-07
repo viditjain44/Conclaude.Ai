@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./db");
@@ -28,6 +28,12 @@ app.get("/", (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+
+// Update this part to increase timeout
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// INCREASE TIMEOUT TO 60 SECONDS
+// AI generation (Llama 3.3) needs more time than a standard API call
+server.timeout = 60000;

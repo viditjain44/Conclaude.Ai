@@ -1,4 +1,4 @@
-require("dotenv").config({ path: require('path').resolve(__dirname, '../.env') });
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./db");
@@ -11,7 +11,10 @@ const insightsRoute = require("./routes/insights");
 const app = express();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true
+}));
 app.use(express.json());
 
 // Connect to MongoDB
